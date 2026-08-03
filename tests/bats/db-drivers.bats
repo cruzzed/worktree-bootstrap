@@ -5,6 +5,7 @@ setup() {
     source "$BATS_TEST_DIRNAME/../../lib/env.sh"
     source "$BATS_TEST_DIRNAME/../../lib/db/base.sh"
     source "$BATS_TEST_DIRNAME/../../lib/db/mysql.sh"
+    source "$BATS_TEST_DIRNAME/../../lib/db/sqlite.sh"
 
     export TMP_BIN="$(mktemp -d)"
     export PATH="$TMP_BIN:$PATH"
@@ -129,4 +130,22 @@ EOF
     run db_clone "mysql" "source_db" "target_db" "1"
     [ "$status" -eq 0 ]
     [[ "$output" == *"[dry-run] would clone MySQL database: source_db -> target_db"* ]]
+}
+
+@test "sqlite driver clones a database file" {
+    command -v sqlite3 >/dev/null 2>&1 || skip
+
+    local src="$(mktemp).sqlite"
+    local target="$(mktemp)_feature_test.sqlite"
+    echo "CREATE TABLE t (id INTEGER); INSERT INTO t VALUES (42);" | sqlite3 "$src"
+
+    DB_SQLITE_SOURCE_PATH="$src"
+    db_sqlite_clone "$src" "$target"
+    [[ -f "$target" ]]
+
+    local count
+    count="$(sqlite3 "$target" 'SELECT COUNT(*) FROM t;')"
+    [[ "$count" == "1" ]]
+
+    rm -f "$src" "$target"
 }
