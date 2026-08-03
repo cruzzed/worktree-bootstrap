@@ -171,9 +171,98 @@ EOF
 }
 
 @test "postgres driver detects availability of psql and pg_dump" {
-    if command -v psql >/dev/null 2>&1 && command -v pg_dump >/dev/null 2>&1; then
+    if command -v psql >/dev/null 2>&1 && command -v pg_dump >/dev/null 2>&1 && command -v createdb >/dev/null 2>&1; then
         db_postgres_available
     else
         ! db_postgres_available
     fi
+}
+
+@test "postgres connection uses PGPASSWORD environment variable" {
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+env | grep -E '^PGPASSWORD=' | sort
+EOF
+    chmod +x "$TMP_BIN/psql"
+
+    run _with_pg_env psql
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"PGPASSWORD=secret"* ]]
+}
+
+@test "postgres create dry-run prints and does not execute" {
+    cat > "$TMP_BIN/createdb" <<'EOF'
+#!/usr/bin/env bash
+echo "createdb executed" >&2
+exit 1
+EOF
+    chmod +x "$TMP_BIN/createdb"
+
+    run db_postgres_create "test_db" "1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] would create Postgres database: test_db"* ]]
+}
+
+@test "postgres drop dry-run prints and does not execute" {
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+echo "psql executed" >&2
+exit 1
+EOF
+    chmod +x "$TMP_BIN/psql"
+
+    run db_postgres_drop "test_db" "1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] would drop Postgres database: test_db"* ]]
+}
+
+@test "postgres clone dry-run prints and does not execute" {
+    cat > "$TMP_BIN/pg_dump" <<'EOF'
+#!/usr/bin/env bash
+echo "pg_dump executed" >&2
+exit 1
+EOF
+    chmod +x "$TMP_BIN/pg_dump"
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+echo "psql executed" >&2
+exit 1
+EOF
+    chmod +x "$TMP_BIN/psql"
+
+    run db_postgres_clone "source_db" "target_db" "true"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] would clone Postgres database: source_db -> target_db"* ]]
+}
+
+@test "db_drop dispatcher passes dry-run to postgres driver" {
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+echo "psql executed" >&2
+exit 1
+EOF
+    chmod +x "$TMP_BIN/psql"
+
+    run db_drop "postgres" "test_db" "1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] would drop Postgres database: test_db"* ]]
+}
+
+@test "db_clone dispatcher passes dry-run to postgres driver" {
+    cat > "$TMP_BIN/pg_dump" <<'EOF'
+#!/usr/bin/env bash
+echo "pg_dump executed" >&2
+exit 1
+EOF
+    chmod +x "$TMP_BIN/pg_dump"
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+echo "psql executed" >&2
+exit 1
+EOF
+    chmod +x "$TMP_BIN/psql"
+
+    run db_clone "postgres" "source_db" "target_db" "1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] would clone Postgres database: source_db -> target_db"* ]]
 }
