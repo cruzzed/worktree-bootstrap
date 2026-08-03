@@ -8,12 +8,13 @@ setup() {
     source "$BATS_TEST_DIRNAME/../../lib/db/sqlite.sh"
 
     export TMP_BIN="$(mktemp -d)"
+    export TMP_TEST_DIR="$(mktemp -d)"
     export PATH="$TMP_BIN:$PATH"
     export DB_PASSWORD="secret"
 }
 
 teardown() {
-    rm -rf "$TMP_BIN"
+    rm -rf "$TMP_BIN" "$TMP_TEST_DIR"
 }
 
 @test "mysql driver detects availability of mysql and mysqldump" {
@@ -133,19 +134,37 @@ EOF
 }
 
 @test "sqlite driver clones a database file" {
-    command -v sqlite3 >/dev/null 2>&1 || skip
+    db_sqlite_available || skip
 
-    local src="$(mktemp).sqlite"
-    local target="$(mktemp)_feature_test.sqlite"
+    local src="$TMP_TEST_DIR/source.sqlite"
+    local target="$TMP_TEST_DIR/target.sqlite"
     echo "CREATE TABLE t (id INTEGER); INSERT INTO t VALUES (42);" | sqlite3 "$src"
 
-    DB_SQLITE_SOURCE_PATH="$src"
     db_sqlite_clone "$src" "$target"
     [[ -f "$target" ]]
 
     local count
     count="$(sqlite3 "$target" 'SELECT COUNT(*) FROM t;')"
     [[ "$count" == "1" ]]
+}
 
-    rm -f "$src" "$target"
+@test "sqlite drop dry-run prints and does not execute" {
+    local target="$TMP_TEST_DIR/drop_me.sqlite"
+    touch "$target"
+
+    run db_sqlite_drop "$target" "1"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] would drop SQLite database file: $target"* ]]
+    [ -f "$target" ]
+}
+
+@test "sqlite clone dry-run prints and does not execute" {
+    local src="$TMP_TEST_DIR/source.sqlite"
+    local target="$TMP_TEST_DIR/target_clone.sqlite"
+    touch "$src"
+
+    run db_sqlite_clone "$src" "$target" "true"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] would clone SQLite database file: $src -> $target"* ]]
+    [ ! -f "$target" ]
 }
