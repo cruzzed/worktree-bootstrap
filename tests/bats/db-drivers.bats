@@ -5,6 +5,7 @@ setup() {
     source "$BATS_TEST_DIRNAME/../../lib/env.sh"
     source "$BATS_TEST_DIRNAME/../../lib/db/base.sh"
     source "$BATS_TEST_DIRNAME/../../lib/db/mysql.sh"
+    source "$BATS_TEST_DIRNAME/../../lib/db/postgres.sh"
     source "$BATS_TEST_DIRNAME/../../lib/db/sqlite.sh"
 
     export TMP_BIN="$(mktemp -d)"
@@ -167,4 +168,12 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"[dry-run] would clone SQLite database file: $src -> $target"* ]]
     [ ! -f "$target" ]
+}
+
+@test "postgres driver detects availability of psql and pg_dump" {
+    if command -v psql >/dev/null 2>&1 && command -v pg_dump >/dev/null 2>&1; then
+        db_postgres_available
+    else
+        ! db_postgres_available
+    fi
 }
