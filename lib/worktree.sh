@@ -35,8 +35,60 @@ create_worktree() {
     git worktree add "$path" "$branch"
 }
 
+# Internal: return 0 if the directory is a registered worktree path.
+_is_worktree_path() {
+    local path="$1"
+    [[ -d "$path" ]] || return 1
+    local abs_path
+    abs_path="$(cd "$path" && pwd)"
+    [[ -e "$abs_path/.git" ]] || return 1
+    git worktree list --porcelain 2>/dev/null | grep -qx "worktree $abs_path"
+}
+
+# Internal: resolve a branch name to its registered worktree path.
+_worktree_path_for_branch() {
+    local branch="$1"
+    git worktree list --porcelain 2>/dev/null | awk -v b="$branch" '
+        /^worktree / { path=$2 }
+        /^branch / {
+            ref=$2
+            sub(/^refs\/heads\//, "", ref)
+            if (ref == b) { print path; exit }
+        }
+    '
+}
+
+# Internal: safely remove a leftover worktree directory after git worktree remove fails.
+_safe_remove_path() {
+    local path="$1"
+    if _is_worktree_path "$path" || git worktree list --porcelain 2>/dev/null | grep -qx "worktree $path"; then
+        rm -rf "$path"
+    else
+        fatal "refusing unsafe removal of non-worktree path: $path"
+    fi
+}
+
 # Remove a worktree by path.
 remove_worktree() {
     local path="$1"
-    git worktree remove "$path" || rm -rf "$path"
+    local dry_run="${2:-}"
+    if [[ "$dry_run" == "1" || "$dry_run" == "true" ]]; then
+        echo "[dry-run] would remove worktree: $path"
+        return 0
+    fi
+    git worktree remove "$path" 2>/dev/null || _safe_remove_path "$path"
+}
+
+# Remove a worktree by branch name or path.
+destroy_worktree() {
+    local branch_or_path="$1"
+    local dry_run="${2:-}"
+    local path=""
+    if _is_worktree_path "$branch_or_path"; then
+        path="$branch_or_path"
+    else
+        path="$(_worktree_path_for_branch "$branch_or_path")"
+    fi
+    [[ -n "$path" ]] || fatal "no worktree found for: $branch_or_path"
+    remove_worktree "$path" "$dry_run"
 }
