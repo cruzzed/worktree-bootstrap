@@ -171,7 +171,7 @@ EOF
 }
 
 @test "postgres driver detects availability of psql and pg_dump" {
-    if command -v psql >/dev/null 2>&1 && command -v pg_dump >/dev/null 2>&1 && command -v createdb >/dev/null 2>&1; then
+    if command -v psql >/dev/null 2>&1 && command -v pg_dump >/dev/null 2>&1; then
         db_postgres_available
     else
         ! db_postgres_available
@@ -191,12 +191,12 @@ EOF
 }
 
 @test "postgres create dry-run prints and does not execute" {
-    cat > "$TMP_BIN/createdb" <<'EOF'
+    cat > "$TMP_BIN/psql" <<'EOF'
 #!/usr/bin/env bash
-echo "createdb executed" >&2
+echo "psql executed" >&2
 exit 1
 EOF
-    chmod +x "$TMP_BIN/createdb"
+    chmod +x "$TMP_BIN/psql"
 
     run db_postgres_create "test_db" "1"
     [ "$status" -eq 0 ]
@@ -233,6 +233,79 @@ EOF
     run db_postgres_clone "source_db" "target_db" "true"
     [ "$status" -eq 0 ]
     [[ "$output" == *"[dry-run] would clone Postgres database: source_db -> target_db"* ]]
+}
+
+@test "postgres exists escapes single quotes in database names" {
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" > "$TMP_PSQL_INPUT"
+echo "1"
+EOF
+    chmod +x "$TMP_BIN/psql"
+    export TMP_PSQL_INPUT="$(mktemp)"
+
+    local weird="db's"
+    run db_postgres_exists "$weird"
+    [ "$status" -eq 0 ]
+    [[ "$(cat "$TMP_PSQL_INPUT")" == *"WHERE datname='db''s'"* ]]
+    rm -f "$TMP_PSQL_INPUT"
+}
+
+@test "postgres drop escapes double quotes in database names" {
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+echo "$*"
+EOF
+    chmod +x "$TMP_BIN/psql"
+
+    local weird='db"name'
+    run db_postgres_drop "$weird"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'DROP DATABASE IF EXISTS "db""name"'* ]]
+}
+
+@test "postgres create escapes double quotes in database names" {
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+echo "$*"
+EOF
+    chmod +x "$TMP_BIN/psql"
+
+    local weird='db"name'
+    run db_postgres_create "$weird"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *'CREATE DATABASE "db""name"'* ]]
+}
+
+@test "postgres uses PG_MAINTENANCE_DB for maintenance database" {
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" > "$TMP_PSQL_INPUT"
+echo "1"
+EOF
+    chmod +x "$TMP_BIN/psql"
+    export TMP_PSQL_INPUT="$(mktemp)"
+
+    PG_MAINTENANCE_DB="template1" run db_postgres_exists "test_db"
+    [ "$status" -eq 0 ]
+    [[ "$(cat "$TMP_PSQL_INPUT")" == *"-d template1"* ]]
+    rm -f "$TMP_PSQL_INPUT"
+}
+
+@test "postgres connection falls back to postgres when USER is unset" {
+    cat > "$TMP_BIN/psql" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" > "$TMP_PSQL_INPUT"
+echo "1"
+EOF
+    chmod +x "$TMP_BIN/psql"
+    export TMP_PSQL_INPUT="$(mktemp)"
+
+    unset USER DB_USERNAME
+    run db_postgres_exists "test_db"
+    [ "$status" -eq 0 ]
+    [[ "$(cat "$TMP_PSQL_INPUT")" == *"--username=postgres"* ]]
+    rm -f "$TMP_PSQL_INPUT"
 }
 
 @test "db_drop dispatcher passes dry-run to postgres driver" {
