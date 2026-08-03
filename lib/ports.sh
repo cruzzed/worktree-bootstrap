@@ -41,6 +41,11 @@ offset_ports_available() {
     return 0
 }
 
+# Escape a string for safe use in a POSIX extended regular expression.
+regex_escape() {
+    sed -E 's/[][\\^$.*+?{}|()]/\\&/g' <<< "$1"
+}
+
 # Allocate an offset for a branch. Echoes the offset.
 allocate_offset() {
     local registry_file="$1"
@@ -53,8 +58,9 @@ allocate_offset() {
     touch "$registry_file"
 
     # Reuse existing offset for this branch.
-    local existing
-    existing="$(grep -E "^${branch}\t" "$registry_file" 2>/dev/null | head -n1 | cut -f2)"
+    local escaped_branch existing
+    escaped_branch="$(regex_escape "$branch")"
+    existing="$(grep -E "^${escaped_branch}"$'\t' "$registry_file" 2>/dev/null | head -n1 | cut -f2)"
     if [[ -n "$existing" && "$existing" =~ ^[0-9]+$ ]]; then
         echo "$existing"
         return 0
@@ -95,18 +101,26 @@ allocate_offset() {
 }
 
 # Register or update a branch entry in the registry.
+# Signature: register_offset <registry_file> <branch> <offset> <db_name> [dry_run]
+# When dry_run is "1", writes are skipped and the function returns silently.
 register_offset() {
     local registry_file="$1"
     local branch="$2"
     local offset="$3"
     local db_name="$4"
+    local dry_run="${5:-0}"
+
+    if [[ "$dry_run" == "1" ]]; then
+        return 0
+    fi
 
     mkdir -p "$(dirname "$registry_file")"
     touch "$registry_file"
 
-    local tmp
+    local escaped_branch tmp
+    escaped_branch="$(regex_escape "$branch")"
     tmp="$(mktemp)"
-    grep -vE "^${branch}\t" "$registry_file" > "$tmp" 2>/dev/null || true
+    grep -vE "^${escaped_branch}"$'\t' "$registry_file" > "$tmp" 2>/dev/null || true
     printf '%s\t%s\t%s\t%s\n' "$branch" "$offset" "$db_name" "$(date -Iseconds)" >> "$tmp"
     mv "$tmp" "$registry_file"
 }
