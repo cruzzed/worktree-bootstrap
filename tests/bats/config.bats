@@ -37,6 +37,23 @@ teardown() {
     [[ -z "$(get_config does.not.exist)" ]]
 }
 
+@test "apply_defaults fills missing keys" {
+    load_config "$TMP_CONFIG"
+    apply_defaults
+    [[ "$(get_config name)" == "Test Project" ]]
+    [[ "$(get_config database.driver)" == "sqlite" ]]
+    [[ "$(get_config ports.base.app)" == "8080" ]]
+}
+
+@test "apply_defaults applies when config is empty" {
+    load_config "/nonexistent/config.yml"
+    apply_defaults
+    [[ "$(get_config name)" == "worktree-bootstrap project" ]]
+    [[ "$(get_config database.driver)" == "mysql" ]]
+    [[ "$(get_config copy_from_main[0])" == ".env" ]]
+    [[ "$(get_config commands.install[0])" == "composer install" ]]
+}
+
 @test "render_template substitutes branch and slug" {
     local -A ports=([app]=8081 [db]=33061)
     local rendered

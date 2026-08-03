@@ -58,6 +58,32 @@ get_config() {
     echo "${CONFIG[$path]:-}"
 }
 
+# Apply default values for any keys not present in the loaded config.
+apply_defaults() {
+    # Defaults mirror the original Pixalink Laravel flow.
+    [[ -z "${CONFIG["name"]:-}" ]] && CONFIG["name"]="worktree-bootstrap project"
+    [[ -z "${CONFIG["copy_from_main[0]"]:-}" ]] && CONFIG["copy_from_main[0]"]=".env"
+    [[ -z "${CONFIG["copy_from_main[1]"]:-}" ]] && CONFIG["copy_from_main[1]"]=".claude/settings.local.json"
+    [[ -z "${CONFIG["copy_from_main[2]"]:-}" ]] && CONFIG["copy_from_main[2]"]="storage/oauth-private.key"
+    [[ -z "${CONFIG["copy_from_main[3]"]:-}" ]] && CONFIG["copy_from_main[3]"]="storage/oauth-public.key"
+    [[ -z "${CONFIG["database.driver"]:-}" ]] && CONFIG["database.driver"]="mysql"
+    [[ -z "${CONFIG["database.source_env_key"]:-}" ]] && CONFIG["database.source_env_key"]="DB_DATABASE"
+    [[ -z "${CONFIG["database.host_env_key"]:-}" ]] && CONFIG["database.host_env_key"]="DB_HOST"
+    [[ -z "${CONFIG["database.port_env_key"]:-}" ]] && CONFIG["database.port_env_key"]="DB_PORT"
+    [[ -z "${CONFIG["database.user_env_key"]:-}" ]] && CONFIG["database.user_env_key"]="DB_USERNAME"
+    [[ -z "${CONFIG["database.pass_env_key"]:-}" ]] && CONFIG["database.pass_env_key"]="DB_PASSWORD"
+    [[ -z "${CONFIG["database.name_prefix"]:-}" ]] && CONFIG["database.name_prefix"]="explore_"
+    [[ -z "${CONFIG["ports.base.app"]:-}" ]] && CONFIG["ports.base.app"]="8080"
+    [[ -z "${CONFIG["ports.base.db"]:-}" ]] && CONFIG["ports.base.db"]="33060"
+    [[ -z "${CONFIG["ports.base.vite"]:-}" ]] && CONFIG["ports.base.vite"]="5173"
+    [[ -z "${CONFIG["ports.base.serve"]:-}" ]] && CONFIG["ports.base.serve"]="8000"
+    [[ -z "${CONFIG["ports.base.redis"]:-}" ]] && CONFIG["ports.base.redis"]="6379"
+    [[ -z "${CONFIG["ports.base.mailhog"]:-}" ]] && CONFIG["ports.base.mailhog"]="1025"
+    [[ -z "${CONFIG["commands.install[0]"]:-}" ]] && CONFIG["commands.install[0]"]="composer install"
+    [[ -z "${CONFIG["commands.install[1]"]:-}" ]] && CONFIG["commands.install[1]"]="npm ci"
+    [[ -z "${CONFIG["commands.build[0]"]:-}" ]] && CONFIG["commands.build[0]"]="npm run build"
+}
+
 # Render a template string using branch, slug, and ports associative array.
 render_template() {
     local template="$1"

@@ -2,10 +2,14 @@
 set -euo pipefail
 
 # Read a value from a KEY=VALUE .env file. Handles optional quotes.
+# Returns an empty string (and exit code 0) when the file or key is missing.
 env_value() {
     local file="$1"
     local key="$2"
-    grep -E "^${key}=" "$file" 2>/dev/null | head -n1 | sed -E "s/^${key}=//" | sed -E "s/^['\"](.*)['\"]$/\1/"
+    if [[ ! -f "$file" ]]; then
+        return 0
+    fi
+    grep -E "^${key}=" "$file" 2>/dev/null | head -n1 | sed -E "s/^${key}=//" | sed -E "s/^['\"](.*)['\"]$/\1/" || true
 }
 
 # Copy an array of files from source_dir to dest_dir. Missing files are skipped silently.
