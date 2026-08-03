@@ -29,12 +29,14 @@ db_create() {
 db_drop() {
     local driver="$1"
     local target="$2"
-    db_call "$driver" drop "$target"
+    local dry_run="${3:-}"
+    db_call "$driver" drop "$target" "$dry_run"
 }
 
 db_clone() {
     local driver="$1"
     local source="$2"
     local target="$3"
-    db_call "$driver" clone "$source" "$target"
+    local dry_run="${4:-}"
+    db_call "$driver" clone "$source" "$target" "$dry_run"
 }
