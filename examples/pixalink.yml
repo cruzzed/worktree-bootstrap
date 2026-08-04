@@ -1,0 +1,39 @@
+name: Pixalink Explore
+copy_from_main:
+  - .env
+  - .claude/settings.local.json
+  - storage/oauth-private.key
+  - storage/oauth-public.key
+
+env_updates:
+  DB_DATABASE: "explore_{branch_slug}"
+  APP_PORT: "{ports.app}"
+  FORWARD_DB_PORT: "{ports.db}"
+  VITE_PORT: "{ports.vite}"
+
+database:
+  driver: mysql
+  source_env_key: DB_DATABASE
+  host_env_key: DB_HOST
+  port_env_key: DB_PORT
+  user_env_key: DB_USERNAME
+  pass_env_key: DB_PASSWORD
+
+ports:
+  base:
+    app: 8080
+    db: 33060
+    vite: 5173
+    serve: 8000
+    redis: 6379
+    mailhog: 1025
+
+commands:
+  install:
+    - composer install
+    - npm ci
+  build:
+    - npm run build
+  serve:
+    - "php artisan serve --port={ports.serve}"
+    - "npm run dev"

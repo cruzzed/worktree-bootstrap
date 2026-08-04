@@ -1,0 +1,26 @@
+name: Django Project
+copy_from_main:
+  - .env
+
+env_updates:
+  APP_PORT: "{ports.app}"
+
+database:
+  driver: sqlite
+  source_env_key: DB_DATABASE
+  sqlite_source_path: db.sqlite3
+
+ports:
+  base:
+    app: 8080
+    db: 33060
+    vite: 5173
+    serve: 8000
+
+commands:
+  install:
+    - pip install -r requirements.txt
+  build:
+    - python manage.py migrate
+  serve:
+    - "python manage.py runserver {ports.app}"
