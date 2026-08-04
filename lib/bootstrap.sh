@@ -79,6 +79,8 @@ run_commands() {
             echo "[dry-run] would run: $cmd"
         else
             info "running: $cmd"
+            # WARNING: commands come from the project config and are executed as-is.
+            # Only run this tool against repositories whose bootstrap commands you trust.
             eval "$cmd" || fatal "command failed: $cmd"
         fi
     done
@@ -155,21 +157,21 @@ cmd_bootstrap() {
         db_target="$worktree_root/${db_name}.sqlite"
     fi
 
-    if db_driver_available "$driver"; then
+    if [[ $DRY_RUN -eq 1 ]]; then
+        echo "[dry-run] would create/clone database $db_target"
+    elif db_driver_available "$driver"; then
         if db_exists "$driver" "$db_target"; then
             if [[ $FORCE_CLONE -eq 1 ]]; then
-                [[ $DRY_RUN -eq 0 ]] && db_drop "$driver" "$db_target"
-            elif [[ $DRY_RUN -eq 0 ]]; then
+                db_drop "$driver" "$db_target"
+            else
                 warn "database $db_target already exists; skipping clone"
             fi
         fi
 
-        if [[ $DRY_RUN -eq 0 ]] && ( [[ $FORCE_CLONE -eq 1 ]] || ! db_exists "$driver" "$db_target" ); then
+        if [[ $FORCE_CLONE -eq 1 ]] || ! db_exists "$driver" "$db_target"; then
             db_create "$driver" "$db_target"
             db_clone "$driver" "$db_source" "$db_target"
             info "cloned database $db_source -> $db_target"
-        elif [[ $DRY_RUN -eq 1 ]]; then
-            echo "[dry-run] would create/clone database $db_target"
         fi
     else
         warn "$driver driver not available; skipping database clone"
@@ -246,8 +248,8 @@ cmd_destroy() {
 
     if [[ -f "$env_file" ]]; then
         export_db_env "$env_file"
-        offset="$(grep -E '^# WORKTREE_BOOTSTRAP=' "$env_file" | head -n1 | sed -E 's/.*:offset:([0-9]+):.*/\1/')"
-        db_name="$(grep -E '^# WORKTREE_BOOTSTRAP=' "$env_file" | head -n1 | sed -E 's/.*:db:(.*)$/\1/')"
+        offset="$(grep -E '^# WORKTREE_BOOTSTRAP=' "$env_file" | head -n1 | sed -E 's/.*:offset:([0-9]+):.*/\1/' || true)"
+        db_name="$(grep -E '^# WORKTREE_BOOTSTRAP=' "$env_file" | head -n1 | sed -E 's/.*:db:(.*)$/\1/' || true)"
     fi
 
     if [[ $DRY_RUN -eq 0 ]]; then
@@ -258,9 +260,10 @@ cmd_destroy() {
         if [[ -n "${offset:-}" ]]; then
             local registry_file="$main_root/.worktree-bootstrap/ports.tsv"
             if [[ -f "$registry_file" ]]; then
-                local tmp
+                local escaped_branch tmp
+                escaped_branch="$(regex_escape "$branch")"
                 tmp="$(mktemp)"
-                grep -vE "^${branch}\t" "$registry_file" > "$tmp" || true
+                grep -vE "^${escaped_branch}"$'\t' "$registry_file" > "$tmp" || true
                 mv "$tmp" "$registry_file"
             fi
         fi

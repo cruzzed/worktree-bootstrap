@@ -11,8 +11,13 @@ setup() {
 }
 
 teardown() {
-    # Remove both the origin and any worktrees created next to it.
-    rm -rf "$TMP_ORIGIN" "${TMP_ORIGIN}-feature-smoke" "${TMP_ORIGIN}-feature-test"
+    # Remove the origin and any worktrees created next to it.
+    rm -rf \
+        "$TMP_ORIGIN" \
+        "${TMP_ORIGIN}-feature-smoke" \
+        "${TMP_ORIGIN}-feature-test" \
+        "${TMP_ORIGIN}-feature-no-marker" \
+        "${TMP_ORIGIN}-feature-dry-db"
 }
 
 @test "create prints dry-run report without errors" {
@@ -49,4 +54,35 @@ EOF
     run "$SCRIPT" destroy feature/test --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" == *"would destroy"* ]]
+}
+
+@test "destroy succeeds when .env exists without marker" {
+    git branch feature/no-marker
+    cat > .worktree-bootstrap.yml <<'EOF'
+database:
+  driver: sqlite
+  sqlite_source_path: main.sqlite
+EOF
+    echo 'DB_DATABASE=main.sqlite' > .env
+    touch main.sqlite
+    git worktree add -q "${TMP_ORIGIN}-feature-no-marker" feature/no-marker
+    cd "${TMP_ORIGIN}-feature-no-marker"
+    run "$SCRIPT" destroy feature/no-marker
+    [ "$status" -eq 0 ]
+    [[ ! -d "${TMP_ORIGIN}-feature-no-marker" ]]
+}
+
+@test "bootstrap dry-run skips database driver availability checks" {
+    git branch feature/dry-db
+    cat > .worktree-bootstrap.yml <<'EOF'
+database:
+  driver: _nonexistent_probe_driver
+EOF
+    echo 'DB_DATABASE=main' > .env
+    git worktree add -q "${TMP_ORIGIN}-feature-dry-db" feature/dry-db
+    cd "${TMP_ORIGIN}-feature-dry-db"
+    run "$SCRIPT" bootstrap --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] would create/clone database"* ]]
+    [[ "$output" != *"driver not available"* ]]
 }

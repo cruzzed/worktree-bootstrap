@@ -18,7 +18,8 @@ Usage: worktree-bootstrap <command> [options]
 
 Commands:
   create <branch>        Create a new worktree and bootstrap it.
-  bootstrap [main-repo]  Bootstrap the current worktree directory.
+  bootstrap --main-repo <path>
+                         Bootstrap the current worktree directory.
   destroy <branch|path>  Destroy a worktree and free its resources.
   --help                 Show this help.
 
