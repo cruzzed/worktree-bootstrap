@@ -17,7 +17,14 @@ fi
 
 rm -rf "$TARGET_DIR"
 mkdir -p "$TARGET_DIR"
-cp -R "$SCRIPT_DIR/"* "$TARGET_DIR/"
+(
+    shopt -s dotglob nullglob
+    for item in "$SCRIPT_DIR/"*; do
+        name="$(basename "$item")"
+        [[ "$name" == ".git" || "$name" == ".superpowers" ]] && continue
+        cp -R "$item" "$TARGET_DIR/"
+    done
+)
 chmod +x "$TARGET_DIR/worktree-bootstrap.sh"
 
 cat > "$BIN_PATH" <<'EOF'
