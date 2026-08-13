@@ -108,11 +108,16 @@ commands:
     - "npm run dev"
 ```
 
-Available templates in `env_updates`:
+Available templates in `env_updates` and `commands`:
 
 - `{branch}` — raw branch name
 - `{branch_slug}` — database-safe slug
+- `{site}` — lowercased worktree directory basename (e.g. the Valet site name)
 - `{ports.app}`, `{ports.db}`, `{ports.vite}`, `{ports.serve}`, `{ports.redis}`, `{ports.mailhog}`
+
+`commands.destroy` (optional) runs before the worktree is torn down — useful
+for cleanup such as `valet unsecure "{site}"`. Hook failures abort teardown, so
+end best-effort commands with `|| true`.
 
 ## How ports are allocated
 

@@ -2,13 +2,14 @@
 set -euo pipefail
 
 # Run a mysql/mysqldump command with connection settings from the environment.
-# Uses MYSQL_PWD so the password is never visible in process listings.
+# The mysql client ignores MYSQL_USER, so host/port/user go via CLI args.
+# MYSQL_PWD is still used so the password is never visible in process listings.
 _with_mysql_env() {
     local host="${DB_HOST:-127.0.0.1}"
     local port="${DB_PORT:-3306}"
     local user="${DB_USERNAME:-root}"
     local pass="${DB_PASSWORD:-}"
-    MYSQL_HOST="$host" MYSQL_TCP_PORT="$port" MYSQL_USER="$user" MYSQL_PWD="$pass" "$@"
+    MYSQL_PWD="$pass" "$@" --host="$host" --port="$port" --user="$user"
 }
 
 # Escape a database name for safe use as a MySQL quoted identifier.

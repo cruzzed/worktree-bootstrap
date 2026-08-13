@@ -17,7 +17,9 @@ teardown() {
         "${TMP_ORIGIN}-feature-smoke" \
         "${TMP_ORIGIN}-feature-test" \
         "${TMP_ORIGIN}-feature-no-marker" \
-        "${TMP_ORIGIN}-feature-dry-db"
+        "${TMP_ORIGIN}-feature-dry-db" \
+        "${TMP_ORIGIN}-feature-env" \
+        "${TMP_ORIGIN}-feature-destroy-hook"
 }
 
 @test "create prints dry-run report without errors" {
@@ -85,4 +87,63 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"[dry-run] would create/clone database"* ]]
     [[ "$output" != *"driver not available"* ]]
+}
+
+@test "bootstrap applies env_updates with branch, slug, site and port templates" {
+    git branch feature/env
+    cat > .worktree-bootstrap.yml <<'YAML'
+database:
+  driver: sqlite
+  sqlite_source_path: main.sqlite
+env_updates:
+  APP_URL: "https://{site}.test"
+  CUSTOM_KEY: "{branch_slug}-{ports.app}"
+commands:
+  install:
+    - "true"
+  build:
+    - "true"
+YAML
+    echo 'DB_DATABASE=main.sqlite' > .env
+    touch main.sqlite
+    git worktree add -q "${TMP_ORIGIN}-feature-env" feature/env
+    cd "${TMP_ORIGIN}-feature-env"
+    run "$SCRIPT" bootstrap
+    [ "$status" -eq 0 ]
+    local expected_site
+    expected_site="$(basename "${TMP_ORIGIN}-feature-env" | tr '[:upper:]' '[:lower:]')"
+    grep -qxF "APP_URL=https://${expected_site}.test" .env
+    local app_port
+    app_port="$(grep -oE '^APP_PORT=[0-9]+' .env | cut -d= -f2)"
+    grep -qxF "CUSTOM_KEY=feature_env-${app_port}" .env
+    grep -qxF "DB_DATABASE=${TMP_ORIGIN}-feature-env/explore_feature_env.sqlite" .env
+}
+
+@test "destroy runs rendered commands.destroy hook before teardown" {
+    git branch feature/destroy-hook
+    cat > .worktree-bootstrap.yml <<'YAML'
+database:
+  driver: sqlite
+  sqlite_source_path: main.sqlite
+commands:
+  install:
+    - "true"
+  build:
+    - "true"
+  destroy:
+    - "touch destroyed-{site}"
+YAML
+    echo 'DB_DATABASE=main.sqlite' > .env
+    touch main.sqlite
+    git worktree add -q "${TMP_ORIGIN}-feature-destroy-hook" feature/destroy-hook
+    cd "${TMP_ORIGIN}-feature-destroy-hook"
+    run "$SCRIPT" bootstrap
+    [ "$status" -eq 0 ]
+    cd "$TMP_ORIGIN"
+    run "$SCRIPT" destroy feature/destroy-hook
+    [ "$status" -eq 0 ]
+    local expected_site
+    expected_site="$(basename "${TMP_ORIGIN}-feature-destroy-hook" | tr '[:upper:]' '[:lower:]')"
+    [[ -f "${TMP_ORIGIN}/destroyed-${expected_site}" ]]
+    [[ ! -d "${TMP_ORIGIN}-feature-destroy-hook" ]]
 }

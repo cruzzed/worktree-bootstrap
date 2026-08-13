@@ -63,6 +63,7 @@ EOF
 #!/usr/bin/env bash
 # Dump the environment keys that mysql received; exclude PATH-like noise.
 env | grep -E '^MYSQL_' | sort
+echo "ARGS: $*"
 EOF
     chmod +x "$TMP_BIN/mysql"
 
@@ -70,6 +71,8 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"MYSQL_PWD=secret"* ]]
     [[ "$output" != *"-psecret"* ]]
+    # mysql client ignores MYSQL_USER, so connection details must be CLI args
+    [[ "$output" == *"ARGS: --host=127.0.0.1 --port=3306 --user=root"* ]]
 }
 
 @test "mysql commands quote database names safely" {

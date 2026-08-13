@@ -80,20 +80,27 @@ apply_defaults() {
     [[ -z "${CONFIG["ports.base.redis"]:-}" ]] && CONFIG["ports.base.redis"]="6379"
     [[ -z "${CONFIG["ports.base.mailhog"]:-}" ]] && CONFIG["ports.base.mailhog"]="1025"
     [[ -z "${CONFIG["commands.install[0]"]:-}" ]] && CONFIG["commands.install[0]"]="composer install"
-    [[ -z "${CONFIG["commands.install[1]"]:-}" ]] && CONFIG["commands.install[1]"]="npm ci"
+    [[ -z "${CONFIG["commands.install[0]"]:-}" ]] && CONFIG["commands.install[1]"]="npm ci"
     [[ -z "${CONFIG["commands.build[0]"]:-}" ]] && CONFIG["commands.build[0]"]="npm run build"
+
+    # The [[ -z ]] && pattern above leaves a non-zero status when the config
+    # already defines the last key checked; callers run under `set -e`.
+    return 0
 }
 
-# Render a template string using branch, slug, and ports associative array.
+# Render a template string using branch, slug, site name, and ports associative array.
+# {site} is the lowercased worktree directory basename (e.g. the Valet site name).
 render_template() {
     local template="$1"
     local branch="$2"
     local branch_slug="$3"
     local -n ports_ref="$4"
+    local site="${5:-}"
 
     local result="$template"
     result="${result//\{branch\}/$branch}"
     result="${result//\{branch_slug\}/$branch_slug}"
+    result="${result//\{site\}/$site}"
 
     local key
     for key in "${!ports_ref[@]}"; do

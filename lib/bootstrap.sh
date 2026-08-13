@@ -63,6 +63,7 @@ export_db_env() {
 
 run_commands() {
     local step="$1"
+    local branch="${2:-}" branch_slug="${3:-}" site="${4:-}" ports_name="${5:-}"
     local -a cmds=()
     local i=0
     while true; do
@@ -73,15 +74,19 @@ run_commands() {
         i=$((i + 1))
     done
 
-    local cmd
+    local cmd rendered_cmd
     for cmd in "${cmds[@]}"; do
+        rendered_cmd="$cmd"
+        if [[ -n "$ports_name" ]]; then
+            rendered_cmd="$(render_template "$cmd" "$branch" "$branch_slug" "$ports_name" "$site")"
+        fi
         if [[ $DRY_RUN -eq 1 ]]; then
-            echo "[dry-run] would run: $cmd"
+            echo "[dry-run] would run: $rendered_cmd"
         else
-            info "running: $cmd"
+            info "running: $rendered_cmd"
             # WARNING: commands come from the project config and are executed as-is.
             # Only run this tool against repositories whose bootstrap commands you trust.
-            eval "$cmd" || fatal "command failed: $cmd"
+            eval "$rendered_cmd" || fatal "command failed: $rendered_cmd"
         fi
     done
 }
@@ -177,16 +182,35 @@ cmd_bootstrap() {
         warn "$driver driver not available; skipping database clone"
     fi
 
+    # Site name: lowercased worktree directory basename (matches the Valet site).
+    local site
+    site="$(basename "$worktree_root" | tr '[:upper:]' '[:lower:]')"
+
     # Update env.
     if [[ $DRY_RUN -eq 0 ]]; then
-        if [[ "$driver" == "sqlite" ]]; then
-            update_env_key "$env_file" "DB_DATABASE" "$db_target"
-        else
-            update_env_key "$env_file" "DB_DATABASE" "$db_name"
+        # Apply every env_updates entry from the config, rendered through
+        # {branch}/{branch_slug}/{site}/{ports.*} templates.
+        local -A seen=()
+        local cfg_key env_key rendered
+        for cfg_key in "${!CONFIG[@]}"; do
+            [[ "$cfg_key" == env_updates.* ]] || continue
+            env_key="${cfg_key#env_updates.}"
+            rendered="$(render_template "${CONFIG[$cfg_key]}" "$branch" "$branch_slug" ports "$site")"
+            update_env_key "$env_file" "$env_key" "$rendered"
+            seen[$env_key]=1
+        done
+
+        # Built-in defaults for keys not set via env_updates.
+        if [[ -z "${seen[DB_DATABASE]:-}" ]]; then
+            if [[ "$driver" == "sqlite" ]]; then
+                update_env_key "$env_file" "DB_DATABASE" "$db_target"
+            else
+                update_env_key "$env_file" "DB_DATABASE" "$db_name"
+            fi
         fi
-        update_env_key "$env_file" "APP_PORT" "${ports[app]}"
-        update_env_key "$env_file" "FORWARD_DB_PORT" "${ports[db]}"
-        update_env_key "$env_file" "VITE_PORT" "${ports[vite]}"
+        [[ -n "${seen[APP_PORT]:-}" ]] || update_env_key "$env_file" "APP_PORT" "${ports[app]}"
+        [[ -n "${seen[FORWARD_DB_PORT]:-}" ]] || update_env_key "$env_file" "FORWARD_DB_PORT" "${ports[db]}"
+        [[ -n "${seen[VITE_PORT]:-}" ]] || update_env_key "$env_file" "VITE_PORT" "${ports[vite]}"
         write_marker "$env_file" "$branch" "$offset" "$db_name"
         register_offset "$registry_file" "$branch" "$offset" "$db_name"
     else
@@ -194,8 +218,8 @@ cmd_bootstrap() {
     fi
 
     # Install and build.
-    run_commands install
-    run_commands build
+    run_commands install "$branch" "$branch_slug" "$site" ports
+    run_commands build "$branch" "$branch_slug" "$site" ports
 
     # Report.
     echo ""
@@ -251,6 +275,22 @@ cmd_destroy() {
         offset="$(grep -E '^# WORKTREE_BOOTSTRAP=' "$env_file" | head -n1 | sed -E 's/.*:offset:([0-9]+):.*/\1/' || true)"
         db_name="$(grep -E '^# WORKTREE_BOOTSTRAP=' "$env_file" | head -n1 | sed -E 's/.*:db:(.*)$/\1/' || true)"
     fi
+
+    # Optional destroy hook commands (e.g. valet unsecure), rendered with the
+    # same template context as bootstrap. Hook failures abort teardown, so
+    # best-effort commands should end with `|| true`.
+    local site branch_slug
+    site="$(basename "$worktree_path" | tr '[:upper:]' '[:lower:]')"
+    branch_slug="$(slugify "$branch")"
+    local -A base_ports ports
+    base_ports[app]="$(get_config ports.base.app)"
+    base_ports[db]="$(get_config ports.base.db)"
+    base_ports[vite]="$(get_config ports.base.vite)"
+    base_ports[serve]="$(get_config ports.base.serve)"
+    base_ports[redis]="$(get_config ports.base.redis)"
+    base_ports[mailhog]="$(get_config ports.base.mailhog)"
+    compute_ports "${offset:-0}" base_ports ports
+    run_commands destroy "$branch" "$branch_slug" "$site" ports
 
     if [[ $DRY_RUN -eq 0 ]]; then
         if [[ -n "${db_name:-}" ]] && db_driver_available "$driver"; then

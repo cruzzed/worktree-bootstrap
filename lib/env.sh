@@ -9,7 +9,7 @@ env_value() {
     if [[ ! -f "$file" ]]; then
         return 0
     fi
-    grep -E "^${key}=" "$file" 2>/dev/null | head -n1 | sed -E "s/^${key}=//" | sed -E "s/^['\"](.*)['\"]$/\1/" || true
+    grep -E "^${key}=" "$file" 2>/dev/null | head -n1 | sed -E "s/^${key}=//" | sed -E "s/^['\"](.*)['\"]$/\1/" | tr -d '\r' || true
 }
 
 # Copy an array of files from source_dir to dest_dir. Missing files are skipped silently.
@@ -33,8 +33,11 @@ update_env_key() {
     local file="$1"
     local key="$2"
     local value="$3"
+    # Escape sed replacement metachars; values may contain / (paths, URLs) or &.
+    local escaped_value="${value//\\/\\\\}"
+    escaped_value="${escaped_value//&/\\&}"
     if grep -qE "^${key}=" "$file" 2>/dev/null; then
-        sed -i -E "s/^${key}=.*/${key}=${value}/" "$file"
+        sed -i -E "s|^${key}=.*|${key}=${escaped_value}|" "$file"
     else
         echo "${key}=${value}" >> "$file"
     fi

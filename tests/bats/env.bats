@@ -39,6 +39,11 @@ EOF
     [[ "$(env_value "$TMP_ENV" NEW_KEY)" == "xyz" ]]
 }
 
+@test "env_value strips carriage returns from CRLF files" {
+    printf 'CRLF_KEY=windows-value\r\n' > "$TMP_ENV"
+    [[ "$(env_value "$TMP_ENV" CRLF_KEY)" == "windows-value" ]]
+}
+
 @test "remove_marker removes marker line" {
     remove_marker "$TMP_ENV"
     ! grep -q '^# WORKTREE_BOOTSTRAP=' "$TMP_ENV"
