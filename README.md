@@ -86,6 +86,7 @@ env_updates:
 
 database:
   driver: mysql          # mysql | sqlite | postgres
+  name_prefix: myapp_    # worktree DBs are named {name_prefix}{branch_slug}
   source_env_key: DB_DATABASE
   host_env_key: DB_HOST
   port_env_key: DB_PORT
@@ -118,6 +119,38 @@ Available templates in `env_updates` and `commands`:
 `commands.destroy` (optional) runs before the worktree is torn down — useful
 for cleanup such as `valet unsecure "{site}"`. Hook failures abort teardown, so
 end best-effort commands with `|| true`.
+
+`env_updates` entries are applied to the worktree's `.env` after it is copied
+from the main repo. They override the built-in defaults: the tool only writes
+`DB_DATABASE` (the cloned database name), `APP_PORT`, `FORWARD_DB_PORT`, and
+`VITE_PORT` itself when you don't set that key in `env_updates`.
+
+If you define `commands.install` or `commands.build`, the built-in defaults
+(`composer install`, `npm ci`, `npm run build`) are replaced entirely, not
+merged.
+
+## Serving with Valet (optional)
+
+If [Laravel Valet](https://laravel.com/docs/valet) (or valet-linux-plus on
+Linux) parks the parent directory of your worktrees (`valet park ~/www`), each
+worktree is automatically served at `https://{worktree-dir}.test` — no per-
+branch serve command or port needed. Use the `{site}` template to wire TLS and
+`APP_URL` per worktree:
+
+```yaml
+env_updates:
+  APP_URL: "https://{site}.test"
+
+commands:
+  build:
+    - npm run build
+    - "command -v valet >/dev/null && valet secure \"{site}\" || true"
+  destroy:
+    - "command -v valet >/dev/null && valet unsecure \"{site}\" || true"
+```
+
+`valet secure`/`unsecure` restart nginx internally, so create/destroy may
+prompt for the sudo password.
 
 ## How ports are allocated
 

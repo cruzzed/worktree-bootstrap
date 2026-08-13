@@ -6,13 +6,14 @@ copy_from_main:
   - storage/oauth-public.key
 
 env_updates:
-  DB_DATABASE: "explore_{branch_slug}"
+  APP_URL: "https://{site}.test"
   APP_PORT: "{ports.app}"
   FORWARD_DB_PORT: "{ports.db}"
   VITE_PORT: "{ports.vite}"
 
 database:
   driver: mysql
+  name_prefix: explore_
   source_env_key: DB_DATABASE
   host_env_key: DB_HOST
   port_env_key: DB_PORT
@@ -28,12 +29,15 @@ ports:
     redis: 6379
     mailhog: 1025
 
+# Sites are served by Valet (parked at ~/www): https://{site}.test
+# valet secure/unsecure runs sudo systemctl restart nginx internally, so the
+# sudo password may be prompted for during create/destroy.
 commands:
   install:
     - composer install
     - npm ci
   build:
     - npm run build
-  serve:
-    - "php artisan serve --port={ports.serve}"
-    - "npm run dev"
+    - "command -v valet >/dev/null && valet secure \"{site}\" || true"
+  destroy:
+    - "command -v valet >/dev/null && valet unsecure \"{site}\" || true"
