@@ -47,15 +47,32 @@ regex_escape() {
 }
 
 # Allocate an offset for a branch. Echoes the offset.
+# When dry_run is "1", the registry is only read (never created or touched).
 allocate_offset() {
     local registry_file="$1"
     local branch="$2"
     local -n alloc_base_ref="$3"
     local check_redis="$4"
     local check_mailhog="$5"
+    local dry_run="${6:-0}"
 
-    mkdir -p "$(dirname "$registry_file")"
-    touch "$registry_file"
+    if [[ "$dry_run" != "1" ]]; then
+        mkdir -p "$(dirname "$registry_file")"
+        touch "$registry_file"
+    fi
+
+    if [[ ! -f "$registry_file" ]]; then
+        # No registry yet: first free offset wins.
+        local off=1
+        while [[ $off -le 1000 ]]; do
+            if offset_ports_available "$off" alloc_base_ref "$check_redis" "$check_mailhog"; then
+                echo "$off"
+                return 0
+            fi
+            off=$((off + 1))
+        done
+        fatal "could not find a free offset after 1000 attempts"
+    fi
 
     # Reuse existing offset for this branch.
     local escaped_branch existing

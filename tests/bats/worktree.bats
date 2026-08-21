@@ -31,6 +31,33 @@ teardown() {
     [[ -e "$TMP_WT/new/.git" ]]
 }
 
+@test "create_worktree creates the branch when it does not exist" {
+    cd "$TMP_ORIGIN"
+    run create_worktree "feature/brand-new" "$TMP_WT/brand-new"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"does not exist; creating from HEAD"* ]]
+    [[ -e "$TMP_WT/brand-new/.git" ]]
+    git show-ref --verify --quiet "refs/heads/feature/brand-new"
+}
+
+@test "create_worktree creates the branch from a custom base ref" {
+    cd "$TMP_ORIGIN"
+    git branch base-ref
+    run create_worktree "feature/from-base" "$TMP_WT/from-base" "base-ref"
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"does not exist; creating from base-ref"* ]]
+    [[ -e "$TMP_WT/from-base/.git" ]]
+    [[ "$(git rev-parse feature/from-base)" == "$(git rev-parse base-ref)" ]]
+}
+
+@test "create_worktree checks out existing branch without recreating it" {
+    cd "$TMP_ORIGIN"
+    run create_worktree "feature/new" "$TMP_WT/existing"
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"does not exist"* ]]
+    [[ -e "$TMP_WT/existing/.git" ]]
+}
+
 @test "require_not_main_root passes outside main repo root" {
     cd "$TMP_ORIGIN"
     git worktree add -q "$TMP_WT/wt" feature/test

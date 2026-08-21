@@ -83,28 +83,55 @@ apply_defaults() {
     [[ -z "${CONFIG["commands.install[0]"]:-}" ]] && CONFIG["commands.install[1]"]="npm ci"
     [[ -z "${CONFIG["commands.build[0]"]:-}" ]] && CONFIG["commands.build[0]"]="npm run build"
 
+    # Laravel/Sail env defaults apply only when the project defines no
+    # env_updates at all, so non-Laravel stacks don't get dead keys written
+    # into their .env (they declare what they need via env_updates instead).
+    local has_env_updates=0
+    local cfg_key
+    for cfg_key in "${!CONFIG[@]}"; do
+        [[ "$cfg_key" == env_updates.* ]] && has_env_updates=1 && break
+    done
+    if [[ $has_env_updates -eq 0 ]]; then
+        CONFIG["env_updates.APP_PORT"]="{ports.app}"
+        CONFIG["env_updates.FORWARD_DB_PORT"]="{ports.db}"
+        CONFIG["env_updates.VITE_PORT"]="{ports.vite}"
+    fi
+
     # The [[ -z ]] && pattern above leaves a non-zero status when the config
     # already defines the last key checked; callers run under `set -e`.
     return 0
 }
 
-# Render a template string using branch, slug, site name, and ports associative array.
+# Render a template string using a context associative array.
+# Recognized tokens correspond to context keys, e.g. {branch}, {branch_slug},
+# {site}, {db_name}, {worktree_root}, {main_repo}, and {ports.<name>}.
 # {site} is the lowercased worktree directory basename (e.g. the Valet site name).
 render_template() {
     local template="$1"
-    local branch="$2"
-    local branch_slug="$3"
-    local -n ports_ref="$4"
-    local site="${5:-}"
+    local -n ctx_ref="$2"
 
     local result="$template"
-    result="${result//\{branch\}/$branch}"
-    result="${result//\{branch_slug\}/$branch_slug}"
-    result="${result//\{site\}/$site}"
-
     local key
-    for key in "${!ports_ref[@]}"; do
-        result="${result//\{ports.$key\}/${ports_ref[$key]}}"
+    for key in "${!ctx_ref[@]}"; do
+        result="${result//\{$key\}/${ctx_ref[$key]}}"
+    done
+
+    echo "$result"
+}
+
+# Replace {env.KEY} tokens in a template with the current value of KEY read
+# from an env file. Missing keys render as an empty string.
+render_env_refs() {
+    local template="$1"
+    local env_file="$2"
+
+    local result="$template"
+    local token key value
+    while [[ "$result" =~ \{env\.([A-Za-z_][A-Za-z0-9_]*)\} ]]; do
+        token="${BASH_REMATCH[0]}"
+        key="${BASH_REMATCH[1]}"
+        value="$(env_value "$env_file" "$key")"
+        result="${result//$token/$value}"
     done
 
     echo "$result"
