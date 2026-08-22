@@ -28,11 +28,22 @@ list_worktrees() {
     git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2}'
 }
 
-# Create a worktree for a branch at a path.
+# Create a worktree for a branch at a path. If the branch does not exist yet,
+# create it from the optional base ref (defaults to HEAD).
 create_worktree() {
     local branch="$1"
     local path="$2"
-    git worktree add "$path" "$branch"
+    local base="${3:-}"
+    if git show-ref --verify --quiet "refs/heads/$branch"; then
+        git worktree add "$path" "$branch"
+    else
+        info "branch '$branch' does not exist; creating from ${base:-HEAD}"
+        if [[ -n "$base" ]]; then
+            git worktree add -b "$branch" "$path" "$base"
+        else
+            git worktree add -b "$branch" "$path"
+        fi
+    fi
 }
 
 # Internal: return 0 if the directory is a registered worktree path.

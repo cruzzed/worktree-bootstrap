@@ -342,3 +342,15 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"[dry-run] would clone Postgres database: source_db -> target_db"* ]]
 }
+
+@test "db_driver_available returns 1 for unknown driver without error output" {
+    run db_driver_available "_nope_driver"
+    [ "$status" -eq 1 ]
+    [[ "$output" != *"command not found"* ]]
+}
+
+@test "db_call fatals with a clear message for unknown driver" {
+    run db_call "_nope_driver" create "x"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"unknown database driver: _nope_driver"* ]]
+}
