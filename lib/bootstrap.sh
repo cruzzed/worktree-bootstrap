@@ -200,11 +200,12 @@ cmd_bootstrap() {
     branch_slug="$(slugify "$branch")"
 
     env_file="$worktree_root/.env"
-    # In create --dry-run the worktree (and its .env) does not exist yet;
-    # resolve {env.KEY} references against the main repo's .env, which is
+    # On a fresh create (and in dry-run) the worktree .env does not exist yet —
+    # copy_from_main seeds it later in the run. Resolve {env.KEY} references
+    # and DB credentials against the main repo's .env in that case, which is
     # what copy_from_main would seed the worktree with.
     local env_refs_file="$env_file"
-    if [[ -n "$WORKTREE_ROOT_OVERRIDE" && ! -f "$env_file" ]]; then
+    if [[ ! -f "$env_file" ]]; then
         env_refs_file="$main_root/.env"
     fi
 
@@ -214,7 +215,7 @@ cmd_bootstrap() {
     echo "  branch   : $branch"
 
     # Load DB env.
-    export_db_env "$env_file"
+    export_db_env "$env_refs_file"
     local name_prefix
     name_prefix="$(get_config database.name_prefix)"
     db_name="${name_prefix}${branch_slug}"
