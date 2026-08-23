@@ -26,7 +26,8 @@ teardown() {
         "${TMP_ORIGIN}-feature-delbr" \
         "${TMP_ORIGIN}-feature-dbcmd" \
         "${TMP_ORIGIN}-feature-nodb" \
-        "${TMP_ORIGIN}-feature-bogus"
+        "${TMP_ORIGIN}-feature-bogus" \
+        "${TMP_ORIGIN}-feature-mysql-create"
 }
 
 @test "create prints dry-run report without errors" {
@@ -308,6 +309,44 @@ YAML
     run "$SCRIPT" destroy feature/nodb
     [ "$status" -eq 0 ]
     [[ "$output" != *"command not found"* ]]
+}
+
+@test "create reads DB credentials from main .env before worktree .env exists" {
+    git branch feature/mysql-create
+    cat > .worktree-bootstrap.yml <<'YAML'
+copy_from_main:
+  - .env
+database:
+  driver: mysql
+  source_env_key: DB_DATABASE
+commands:
+  install:
+    - "true"
+  build:
+    - "true"
+YAML
+    echo 'DB_DATABASE=main_production_db' > .env
+
+    export TMP_BIN="$(mktemp -d)"
+    export PATH="$TMP_BIN:$PATH"
+    export MYSQLDUMP_ARGS="$(mktemp)"
+    cat > "$TMP_BIN/mysqldump" <<'EOF'
+#!/usr/bin/env bash
+echo "$*" > "$MYSQLDUMP_ARGS"
+echo "-- mock dump"
+EOF
+    cat > "$TMP_BIN/mysql" <<'EOF'
+#!/usr/bin/env bash
+cat > /dev/null
+EOF
+    chmod +x "$TMP_BIN/mysqldump" "$TMP_BIN/mysql"
+
+    run "$SCRIPT" create feature/mysql-create
+    [ "$status" -eq 0 ]
+    # The fresh worktree has no .env until copy_from_main seeds it mid-run;
+    # mysqldump must still receive the source db from the main repo .env.
+    [[ "$(cat "$MYSQLDUMP_ARGS")" == *"--single-transaction main_production_db"* ]]
+    rm -rf "$TMP_BIN" "$MYSQLDUMP_ARGS"
 }
 
 @test "unknown driver warns cleanly and reports the skip" {
