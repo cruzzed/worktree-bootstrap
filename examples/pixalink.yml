@@ -41,3 +41,8 @@ commands:
     - "command -v valet >/dev/null && valet secure \"{site}\" || true"
   destroy:
     - "command -v valet >/dev/null && valet unsecure \"{site}\" || true"
+
+aliases:
+  tinker: "php artisan tinker"
+  migrate: "php artisan migrate"
+  test: "php artisan test"

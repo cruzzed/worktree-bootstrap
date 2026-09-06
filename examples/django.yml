@@ -24,3 +24,8 @@ commands:
     - python manage.py migrate
   serve:
     - "python manage.py runserver {ports.app}"
+
+aliases:
+  runserver: "python manage.py runserver {ports.serve}"
+  test: "python manage.py test"
+  shell: "python manage.py shell"

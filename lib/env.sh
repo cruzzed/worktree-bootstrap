@@ -49,6 +49,30 @@ remove_marker() {
     sed -i '/^# WORKTREE_BOOTSTRAP=/d' "$file"
 }
 
+# Export every KEY=VALUE pair from an .env file into the environment.
+# Best-effort: blank lines and comments are skipped, an optional `export `
+# prefix is accepted, and matching surrounding quotes are stripped. Values are
+# not re-interpreted (no variable expansion), unlike `source`.
+export_env_file() {
+    local file="$1"
+    [[ -f "$file" ]] || return 0
+    local line key value
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%$'\r'}"
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+        line="${line#export }"
+        [[ "$line" == *=* ]] || continue
+        key="${line%%=*}"
+        value="${line#*=}"
+        [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+        if [[ "$value" =~ ^\".*\"$ || "$value" =~ ^\'.*\'$ ]]; then
+            value="${value:1:${#value}-2}"
+        fi
+        export "$key=$value"
+    done < "$file"
+}
+
 # Append a fresh marker line.
 write_marker() {
     local file="$1"

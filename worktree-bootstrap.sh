@@ -21,9 +21,15 @@ Commands:
   bootstrap --main-repo <path>
                          Bootstrap the current worktree directory.
   destroy <branch|path>  Destroy a worktree and free its resources.
+  exec <branch|path> [cmd...]
+                         Run a command (or a config `aliases` entry) inside a
+                         worktree: its directory, .env, and venv/bin dirs.
+                         With no command, lists the project's aliases.
+  <branch|path> [cmd...] Shorthand for exec.
   --help                 Show this help.
 
-Global options (may appear in any position):
+Global options (may appear in any position for create/bootstrap/destroy;
+before the worktree name for exec/shorthand):
   --dry-run              Preview without making changes.
   --force-clone          Drop and re-create the target database.
   --check-redis          Include Redis port in availability checks.
@@ -57,6 +63,27 @@ main() {
             *)
                 if [[ -z "$command" ]]; then
                     command="$1"
+                    # exec and the shorthand pass everything after the target
+                    # through verbatim (including -flags), so stop global flag
+                    # parsing and dispatch immediately.
+                    case "$command" in
+                        create|bootstrap|destroy) ;;
+                        exec)
+                            shift
+                            [[ $# -gt 0 ]] || fatal "exec requires a branch or path"
+                            command="$1"
+                            shift
+                            [[ "${1:-}" == "--" ]] && shift
+                            cmd_exec "$command" "$@"
+                            exit $?
+                            ;;
+                        *)
+                            shift
+                            [[ "${1:-}" == "--" ]] && shift
+                            cmd_exec "$command" "$@"
+                            exit $?
+                            ;;
+                    esac
                 else
                     positionals+=("$1")
                 fi
