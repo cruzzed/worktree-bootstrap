@@ -3,6 +3,15 @@
 A framework-agnostic tool for creating, bootstrapping, and destroying git
 worktrees with per-worktree databases and unique local ports.
 
+The vision: **make working in a worktree as convenient as working in the
+parent project.** Same commands, same tooling, no mental context switch — the
+worktree just has its own database, ports, and environment.
+
+One use case among many: **agentic development**. Coding agents can develop
+many branches in parallel, each in its own fully-provisioned worktree, and
+drive them from the main repo (`worktree-bootstrap feature/x test`) without
+ever leaving the parent project.
+
 ## Why
 
 When you maintain a project with long-lived feature branches, you often want a
@@ -58,11 +67,16 @@ worktree-bootstrap create <branch>        # create + bootstrap a worktree
                                           # (creates the branch if it doesn't exist)
 worktree-bootstrap bootstrap              # bootstrap the current directory
 worktree-bootstrap destroy <branch|path>  # remove worktree, DB, and ports
+worktree-bootstrap exec <branch|path> [cmd...]
+                                          # run a preset/alias/command inside
+                                          # a worktree; no cmd = list presets
+worktree-bootstrap <branch|path> [cmd...] # shorthand for exec
 worktree-bootstrap --help                 # show help
 ```
 
-Global options (may appear in any position relative to the command and its
-arguments):
+Global options (may appear in any position for `create`/`bootstrap`/`destroy`;
+for `exec`/shorthand they must come **before** the worktree name, since
+everything after the worktree name is passed to the command verbatim):
 
 - `--dry-run` — preview without making changes; on `create` this renders the
   full bootstrap plan (config, ports, env updates, and every command)
@@ -95,7 +109,7 @@ env_updates:
 database:
   driver: mysql          # mysql | sqlite | postgres | none
   name_prefix: myapp_    # worktree DBs are named {name_prefix}{branch_slug}
-                         # (built-in default: explore_)
+                         # (built-in default: wt_)
   source_env_key: DB_DATABASE
   host_env_key: DB_HOST
   port_env_key: DB_PORT
@@ -131,7 +145,8 @@ database:
   drop: "scripts/db_drop.sh {branch_slug} || true"
 ```
 
-Available templates in `env_updates`, `commands`, and `database.create`/`drop`:
+Available templates in `env_updates`, `commands`, `aliases`, and
+`database.create`/`drop`:
 
 - `{branch}` — raw branch name
 - `{branch_slug}` — database-safe slug
@@ -173,6 +188,63 @@ referenced by your config are listed as allocated-but-unused.
 If you define `commands.install` or `commands.build`, the built-in defaults
 (`composer install`, `npm ci`, `npm run build`) are replaced entirely, not
 merged.
+
+## Running commands in a worktree
+
+`exec` runs something inside a worktree without leaving the main repo, with
+the worktree's own execution context:
+
+```bash
+worktree-bootstrap feature/x test              # shorthand
+worktree-bootstrap exec feature/x runserver    # explicit form
+worktree-bootstrap exec feature/x              # list available presets/aliases
+```
+
+The command runs with the worktree directory as cwd, the worktree's `.env`
+exported, and the worktree's `.venv/bin`, `vendor/bin`, and
+`node_modules/.bin` prepended to PATH (whichever exist) — so `python`,
+`pytest`, `php`, or `npm` resolve against the worktree's own installs. The
+command's exit code propagates, so this composes with scripts and CI.
+
+The command name resolves in this order:
+
+1. **Preset script** — `.wtbs/<name>` in the worktree checkout, falling back
+   to `.wtbs/<name>` in the main repo (so a branch can carry its own
+   commands, or override project-wide ones). Think Django management
+   commands: each file in `.wtbs/` is a named command, run with bash. Extra
+   arguments arrive as positional parameters (`"$@"`). Presets are **not**
+   template-rendered (real scripts may contain literal `{` braces); instead
+   the template context is exported as environment variables:
+   `WTBS_BRANCH`, `WTBS_BRANCH_SLUG`, `WTBS_SITE`, `WTBS_DB_NAME`,
+   `WTBS_WORKTREE_ROOT`, `WTBS_MAIN_REPO`, and `WTBS_PORT_APP` / `_DB` /
+   `_VITE` / `_SERVE` / `_REDIS` / `_MAILHOG`. Trailing CR is stripped before
+   execution, so CRLF checkouts (`core.autocrlf=true`) don't break presets.
+
+   ```bash
+   # .wtbs/runserver
+   #!/usr/bin/env bash
+   exec uv run python manage.py runserver "${WTBS_PORT_SERVE:-8000}" "$@"
+   ```
+
+2. **Alias** — a one-liner from `aliases:` in `.worktree-bootstrap.yml`,
+   rendered with the same template tokens as `commands.*`; extra arguments
+   are appended:
+
+   ```yaml
+   aliases:
+     runserver: "uv run python manage.py runserver {ports.serve}"
+     test: "uv run pytest"
+   ```
+
+   `worktree-bootstrap feature/x test -k login` → `uv run pytest -k login`.
+
+3. **Raw command** — anything else is run verbatim (still template-rendered,
+   so `worktree-bootstrap feature/x echo {db_name}` works).
+
+Use presets for anything non-trivial and aliases for one-liners; both are
+listed by `worktree-bootstrap exec <branch|path>` with no command. The same
+trust warning as `commands.*` applies: presets and aliases are project files
+executed as-is — only run them for repositories you trust.
 
 ## Serving with Valet (optional)
 

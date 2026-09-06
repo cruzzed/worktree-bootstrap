@@ -59,17 +59,17 @@ teardown() {
         [branch]=feature/foo-bar
         [branch_slug]=feature_foo_bar
         [site]=mysite
-        [db_name]=explore_feature_foo_bar
+        [db_name]=wt_feature_foo_bar
         [worktree_root]=/tmp/wt
         [main_repo]=/tmp/main
         [ports.app]=8081
         [ports.db]=33061
     )
     local rendered
-    rendered="$(render_template 'explore_{branch_slug}_{ports.app}' ctx)"
-    [[ "$rendered" == "explore_feature_foo_bar_8081" ]]
+    rendered="$(render_template 'wt_{branch_slug}_{ports.app}' ctx)"
+    [[ "$rendered" == "wt_feature_foo_bar_8081" ]]
     rendered="$(render_template '{db_name} {worktree_root} {main_repo} {site} {branch}' ctx)"
-    [[ "$rendered" == "explore_feature_foo_bar /tmp/wt /tmp/main mysite feature/foo-bar" ]]
+    [[ "$rendered" == "wt_feature_foo_bar /tmp/wt /tmp/main mysite feature/foo-bar" ]]
 }
 
 @test "render_env_refs substitutes existing env values" {
