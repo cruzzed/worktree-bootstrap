@@ -1,9 +1,6 @@
-name: Pixalink Explore
+name: Laravel Project
 copy_from_main:
   - .env
-  - .claude/settings.local.json
-  - storage/oauth-private.key
-  - storage/oauth-public.key
 
 env_updates:
   APP_URL: "https://{site}.test"
@@ -13,7 +10,7 @@ env_updates:
 
 database:
   driver: mysql
-  name_prefix: explore_
+  name_prefix: myapp_
   source_env_key: DB_DATABASE
   host_env_key: DB_HOST
   port_env_key: DB_PORT
@@ -29,9 +26,10 @@ ports:
     redis: 6379
     mailhog: 1025
 
-# Sites are served by Valet (parked at ~/www): https://{site}.test
-# valet secure/unsecure runs sudo systemctl restart nginx internally, so the
-# sudo password may be prompted for during create/destroy.
+# Sites are served by Valet (park the parent directory of your worktrees):
+# https://{site}.test
+# valet secure/unsecure restarts nginx internally, so the sudo password may
+# be prompted for during create/destroy.
 commands:
   install:
     - composer install

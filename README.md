@@ -109,7 +109,7 @@ env_updates:
 database:
   driver: mysql          # mysql | sqlite | postgres | none
   name_prefix: myapp_    # worktree DBs are named {name_prefix}{branch_slug}
-                         # (built-in default: explore_)
+                         # (built-in default: wt_)
   source_env_key: DB_DATABASE
   host_env_key: DB_HOST
   port_env_key: DB_PORT

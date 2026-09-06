@@ -125,7 +125,7 @@ YAML
     offset="$(grep -oE 'offset:[0-9]+' .env | cut -d: -f2)"
     app_port=$((8080 + offset))
     grep -qxF "CUSTOM_KEY=feature_env-${app_port}" .env
-    grep -qxF "DB_DATABASE=${TMP_ORIGIN}-feature-env/explore_feature_env.sqlite" .env
+    grep -qxF "DB_DATABASE=${TMP_ORIGIN}-feature-env/wt_feature_env.sqlite" .env
     # env_updates is defined, so no built-in Laravel keys are written.
     ! grep -qE '^APP_PORT=' .env
     ! grep -qE '^FORWARD_DB_PORT=' .env
@@ -277,7 +277,7 @@ YAML
     run "$SCRIPT" bootstrap
     [ "$status" -eq 0 ]
     [[ -f "db-created-feature_dbcmd" ]]
-    grep -qxF "DB_NAME=explore_feature_dbcmd" .env
+    grep -qxF "DB_NAME=wt_feature_dbcmd" .env
     # Command-based provisioning owns its env: no built-in DB_DATABASE write.
     ! grep -qE '^DB_DATABASE=' .env
     cd "$TMP_ORIGIN"
