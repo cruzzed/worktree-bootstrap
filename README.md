@@ -86,6 +86,11 @@ everything after the worktree name is passed to the command verbatim):
 - `--main-repo <path>` — override main repo path
 - `--config <path>` — override config file path
 - `--base <ref>` — base ref for a new branch (create only; default: HEAD)
+- `--dir <name>` — custom worktree directory name (create only). The default
+  is `<repo>-<branch>` with **every separator-delimited segment truncated to
+  4 chars** (`MyRepo` + `feature/shopify-oauth-space-selector` →
+  `MyRe-feat-shop-oaut-spac-sele`), which keeps valet server names short
+  enough for nginx (see below); use `--dir` when you want a specific name
 - `--delete-branch` — also delete the branch after `destroy`
 
 `destroy` always runs `git worktree prune` afterwards, so the branch is
@@ -268,6 +273,24 @@ commands:
 
 `valet secure`/`unsecure` restart nginx internally, so create/destroy may
 prompt for the sudo password.
+
+**Mind the server-name length.** valet derives the nginx `server_name` from
+the directory name (`<dir>.<tld>` plus `www.` and `*.` variants), and nginx's
+default `server_names_hash_bucket_size` is 64 — an over-long name makes the
+nginx config test fail, which takes down **every** valet site on the machine,
+not just the new one. The default directory naming already truncates every
+name segment to 4 chars to stay well under the ceiling, and `create`
+additionally derives the prospective server name (reading the TLD from
+valet's `config.json`, defaulting to `test`), prints it in `--dry-run`, and
+warns when the longest variant gets close to 64. When it does, give the
+worktree a shorter directory instead of a shorter branch:
+
+```bash
+worktree-bootstrap create feature/shopify-oauth-space-selector --dir myapp-shopify-oauth
+```
+
+`destroy <branch>` resolves worktrees via git's registered-worktree list, so
+custom `--dir` names destroy cleanly by branch name.
 
 ## How ports are allocated
 

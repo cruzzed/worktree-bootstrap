@@ -10,6 +10,14 @@ setup() {
     [[ "$(slugify '---trim---')" == "trim" ]]
 }
 
+@test "shorten_name truncates every segment to 4 chars" {
+    [[ "$(shorten_name 'MyRepo-feature/shopify-oauth-space-selector')" == "MyRe-feat-shop-oaut-spac-sele" ]]
+    [[ "$(shorten_name 'repo-dev')" == "repo-dev" ]]
+    [[ "$(shorten_name 'a/b_c.d--e')" == "a-b-c-d-e" ]]
+    [[ "$(shorten_name '--lead/trail--')" == "lead-trai" ]]
+    [[ "$(shorten_name 'exact')" == "exac" ]]
+}
+
 @test "command_exists finds existing commands" {
     command_exists bash
     ! command_exists this_command_definitely_does_not_exist_12345
