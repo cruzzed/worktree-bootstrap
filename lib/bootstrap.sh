@@ -418,7 +418,7 @@ cmd_create() {
         esac
         worktree_path="$(dirname "$main_root")/$DIR_OVERRIDE"
     else
-        worktree_path="$(dirname "$main_root")/$(basename "$main_root")-${branch//\//-}"
+        worktree_path="$(default_worktree_path "$main_root" "$branch")"
     fi
 
     warn_long_site_name "$worktree_path"
@@ -457,7 +457,7 @@ cmd_destroy() {
     else
         worktree_path="$(_worktree_path_for_branch "$target")"
         if [[ -z "$worktree_path" || "$worktree_path" == "$main_root" ]]; then
-            worktree_path="$(dirname "$main_root")/$(basename "$main_root")-${target//\//-}"
+            worktree_path="$(default_worktree_path "$main_root" "$target")"
         fi
     fi
 

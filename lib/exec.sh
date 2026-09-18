@@ -94,7 +94,7 @@ cmd_exec() {
         worktree_path="$(_worktree_path_for_branch "$target")"
         if [[ -z "$worktree_path" ]]; then
             local candidate
-            candidate="$(dirname "$main_root")/$(basename "$main_root")-${target//\//-}"
+            candidate="$(default_worktree_path "$main_root" "$target")"
             [[ -d "$candidate" ]] && worktree_path="$candidate"
         fi
     fi

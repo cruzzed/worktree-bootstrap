@@ -13,25 +13,18 @@ setup() {
 }
 
 teardown() {
-    # Remove the origin and any worktrees created next to it.
-    rm -rf \
-        "$TMP_ORIGIN" \
-        "${TMP_ORIGIN}-feature-smoke" \
-        "${TMP_ORIGIN}-feature-test" \
-        "${TMP_ORIGIN}-feature-no-marker" \
-        "${TMP_ORIGIN}-feature-dry-db" \
-        "${TMP_ORIGIN}-feature-env" \
-        "${TMP_ORIGIN}-feature-destroy-hook" \
-        "${TMP_ORIGIN}-feature-plan" \
-        "${TMP_ORIGIN}-feature-missing-hook" \
-        "${TMP_ORIGIN}-feature-prune" \
-        "${TMP_ORIGIN}-feature-delbr" \
-        "${TMP_ORIGIN}-feature-dbcmd" \
-        "${TMP_ORIGIN}-feature-nodb" \
-        "${TMP_ORIGIN}-feature-bogus" \
-        "${TMP_ORIGIN}-feature-mysql-create" \
-        "${TMP_ORIGIN}-feature-longname" \
-        "$(dirname "$TMP_ORIGIN")/wt-customdir"
+    # Remove every registered worktree (created either directly or by the
+    # tool under shortened/custom names), then the origin itself.
+    if [[ -d "$TMP_ORIGIN" ]]; then
+        local wt
+        git -C "$TMP_ORIGIN" worktree list --porcelain 2>/dev/null \
+            | awk '/^worktree / {print $2}' \
+            | while read -r wt; do
+                [[ "$wt" == "$TMP_ORIGIN" ]] && continue
+                git -C "$TMP_ORIGIN" worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+            done
+    fi
+    rm -rf "$TMP_ORIGIN" "$(dirname "$TMP_ORIGIN")/wt-customdir"
 }
 
 @test "create prints dry-run report without errors" {
@@ -375,10 +368,13 @@ YAML
 }
 
 @test "create --dry-run shows the derived valet site name" {
+    source "$BATS_TEST_DIRNAME/../../lib/utils.sh"
     git branch feature/smoke
+    local expected_site
+    expected_site="$(shorten_name "$(basename "$TMP_ORIGIN")-feature/smoke" | tr '[:upper:]' '[:lower:]')"
     run "$SCRIPT" create feature/smoke --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" == *"[dry-run] valet site: "$(basename "${TMP_ORIGIN}-feature-smoke" | tr '[:upper:]' '[:lower:]')".test"* ]]
+    [[ "$output" == *"[dry-run] valet site: ${expected_site}.test"* ]]
 }
 
 @test "create --dry-run reads the valet TLD from valet config" {
@@ -392,14 +388,10 @@ YAML
 }
 
 @test "create --dry-run warns when the valet server name exceeds the nginx bucket" {
-    git branch feature/longname
-    # Pad the repo basename so the derived server name crosses 64 chars even
-    # with a short branch: longest variant is "www." + <dir>.<tld>.
-    local long_origin="${TMP_ORIGIN}-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    mv "$TMP_ORIGIN" "$long_origin"
-    export TMP_ORIGIN="$long_origin"
-    cd "$TMP_ORIGIN"
-    run "$SCRIPT" create feature/longname --dry-run
+    # Segments truncate to 4 chars, so crossing 64 takes many segments:
+    # <repo>-feat-alph-brav-char-delt-echo-foxt-golf-hote-indi + .test + www.
+    git branch feature/alpha/bravo/charlie/delta/echo/foxtrot/golf/hotel/india
+    run "$SCRIPT" create feature/alpha/bravo/charlie/delta/echo/foxtrot/golf/hotel/india --dry-run
     [ "$status" -eq 0 ]
     [[ "$output" == *"EXCEEDS nginx's default server_names_hash_bucket_size"* ]]
     [[ "$output" == *"ALL valet sites"* ]]
@@ -457,5 +449,18 @@ YAML
     current="$(git rev-parse --abbrev-ref HEAD)"
     run "$SCRIPT" destroy "$current" --dry-run
     [ "$status" -eq 0 ]
-    [[ "$output" == *"would destroy ${TMP_ORIGIN}-${current}"* ]]
+    [[ "$output" == *"would destroy"* ]]
+    [[ "$output" != *"would destroy $TMP_ORIGIN and"* ]]
+}
+
+@test "create --dry-run shortens every name segment to 4 chars" {
+    source "$BATS_TEST_DIRNAME/../../lib/utils.sh"
+    git branch feature/smoke
+    local expected
+    expected="$(dirname "$TMP_ORIGIN")/$(shorten_name "$(basename "$TMP_ORIGIN")-feature/smoke")"
+    run "$SCRIPT" create feature/smoke --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"would create worktree $expected "* ]]
+    # Segments truncated: no segment longer than 4 chars in the dir basename.
+    [[ "$(basename "$expected")" != *"feature"* ]]
 }

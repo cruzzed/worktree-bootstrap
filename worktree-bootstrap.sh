@@ -38,8 +38,8 @@ before the worktree name for exec/shorthand):
   --config <path>        Override config file path.
   --base <ref>           Base ref for a new branch (create only; default: HEAD).
   --dir <name>           Custom worktree directory name (create only; default:
-                         <repo>-<branch>). Useful to keep valet server names
-                         short enough for nginx.
+                         <repo>-<branch> with every segment truncated to 4
+                         chars, keeping valet server names short for nginx).
   --delete-branch        Also delete the branch after destroy.
 EOF
 }
