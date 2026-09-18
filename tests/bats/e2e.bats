@@ -3,6 +3,8 @@
 setup() {
     export TMP_ORIGIN="$(mktemp -d)"
     export SCRIPT="$BATS_TEST_DIRNAME/../../worktree-bootstrap.sh"
+    # Hermetic valet TLD detection: no machine config during tests.
+    export VALET_CONFIG="/nonexistent/valet-config.json"
     cd "$TMP_ORIGIN"
     git init -q
     git config user.email "test@example.com"
@@ -27,7 +29,9 @@ teardown() {
         "${TMP_ORIGIN}-feature-dbcmd" \
         "${TMP_ORIGIN}-feature-nodb" \
         "${TMP_ORIGIN}-feature-bogus" \
-        "${TMP_ORIGIN}-feature-mysql-create"
+        "${TMP_ORIGIN}-feature-mysql-create" \
+        "${TMP_ORIGIN}-feature-longname" \
+        "$(dirname "$TMP_ORIGIN")/wt-customdir"
 }
 
 @test "create prints dry-run report without errors" {
@@ -368,4 +372,90 @@ YAML
     [[ "$output" == *"_bogus_driver driver not available"* ]]
     [[ "$output" != *"command not found"* ]]
     [[ "$output" == *"database ............ skipped (_bogus_driver driver not available)"* ]]
+}
+
+@test "create --dry-run shows the derived valet site name" {
+    git branch feature/smoke
+    run "$SCRIPT" create feature/smoke --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] valet site: "$(basename "${TMP_ORIGIN}-feature-smoke" | tr '[:upper:]' '[:lower:]')".test"* ]]
+}
+
+@test "create --dry-run reads the valet TLD from valet config" {
+    git branch feature/smoke
+    export VALET_CONFIG="$(mktemp)"
+    echo '{"tld": "develop"}' > "$VALET_CONFIG"
+    run "$SCRIPT" create feature/smoke --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"[dry-run] valet site: "*".develop"* ]]
+    rm -f "$VALET_CONFIG"
+}
+
+@test "create --dry-run warns when the valet server name exceeds the nginx bucket" {
+    git branch feature/longname
+    # Pad the repo basename so the derived server name crosses 64 chars even
+    # with a short branch: longest variant is "www." + <dir>.<tld>.
+    local long_origin="${TMP_ORIGIN}-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    mv "$TMP_ORIGIN" "$long_origin"
+    export TMP_ORIGIN="$long_origin"
+    cd "$TMP_ORIGIN"
+    run "$SCRIPT" create feature/longname --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"EXCEEDS nginx's default server_names_hash_bucket_size"* ]]
+    [[ "$output" == *"ALL valet sites"* ]]
+}
+
+@test "create --dir uses a custom directory name" {
+    git branch feature/customdir
+    cat > .worktree-bootstrap.yml <<'YAML'
+database:
+  driver: none
+commands:
+  install:
+    - "true"
+  build:
+    - "true"
+YAML
+    run "$SCRIPT" create feature/customdir --dir wt-customdir
+    [ "$status" -eq 0 ]
+    [ -d "$(dirname "$TMP_ORIGIN")/wt-customdir" ]
+    git worktree list --porcelain | grep -qx "worktree $(dirname "$TMP_ORIGIN")/wt-customdir"
+}
+
+@test "create --dir rejects traversal and slashes" {
+    git branch feature/customdir
+    run "$SCRIPT" create feature/customdir --dir ../evil
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"--dir must be a plain directory name"* ]]
+    run "$SCRIPT" create feature/customdir --dir a/b
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"--dir must be a plain directory name"* ]]
+}
+
+@test "destroy resolves a --dir worktree by branch name" {
+    git branch feature/customdir
+    cat > .worktree-bootstrap.yml <<'YAML'
+database:
+  driver: none
+commands:
+  install:
+    - "true"
+  build:
+    - "true"
+YAML
+    run "$SCRIPT" create feature/customdir --dir wt-customdir
+    [ "$status" -eq 0 ]
+    run "$SCRIPT" destroy feature/customdir
+    [ "$status" -eq 0 ]
+    [ ! -d "$(dirname "$TMP_ORIGIN")/wt-customdir" ]
+}
+
+@test "destroy by branch name never resolves to the main repo" {
+    # The current branch is checked out at the main repo; destroying it by
+    # name must not touch the main checkout.
+    local current
+    current="$(git rev-parse --abbrev-ref HEAD)"
+    run "$SCRIPT" destroy "$current" --dry-run
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"would destroy ${TMP_ORIGIN}-${current}"* ]]
 }

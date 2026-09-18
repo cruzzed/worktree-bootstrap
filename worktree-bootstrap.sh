@@ -37,6 +37,9 @@ before the worktree name for exec/shorthand):
   --main-repo <path>     Override path to the main repository.
   --config <path>        Override config file path.
   --base <ref>           Base ref for a new branch (create only; default: HEAD).
+  --dir <name>           Custom worktree directory name (create only; default:
+                         <repo>-<branch>). Useful to keep valet server names
+                         short enough for nginx.
   --delete-branch        Also delete the branch after destroy.
 EOF
 }
@@ -59,6 +62,7 @@ main() {
             --main-repo) shift; [[ $# -gt 0 ]] || fatal "--main-repo requires a value"; MAIN_ROOT_OVERRIDE="$1" ;;
             --config) shift; [[ $# -gt 0 ]] || fatal "--config requires a value"; CONFIG_PATH_OVERRIDE="$1" ;;
             --base) shift; [[ $# -gt 0 ]] || fatal "--base requires a value"; BASE_REF="$1" ;;
+            --dir) shift; [[ $# -gt 0 ]] || fatal "--dir requires a value"; DIR_OVERRIDE="$1" ;;
             -*) fatal "unknown option: $1" ;;
             *)
                 if [[ -z "$command" ]]; then

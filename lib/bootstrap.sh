@@ -22,6 +22,7 @@ MAIN_ROOT_OVERRIDE=""
 CONFIG_PATH_OVERRIDE=""
 BASE_REF=""
 DELETE_BRANCH=0
+DIR_OVERRIDE=""
 WORKTREE_ROOT_OVERRIDE=""
 BRANCH_OVERRIDE=""
 
@@ -411,10 +412,20 @@ cmd_create() {
     local branch="$1"
     local main_root worktree_path
     main_root="$(resolve_main_root "$MAIN_ROOT_OVERRIDE")"
-    worktree_path="$(dirname "$main_root")/$(basename "$main_root")-${branch//\//-}"
+    if [[ -n "$DIR_OVERRIDE" ]]; then
+        case "$DIR_OVERRIDE" in
+            /*|*..*|*/*) fatal "--dir must be a plain directory name (no slashes, no '..'): $DIR_OVERRIDE" ;;
+        esac
+        worktree_path="$(dirname "$main_root")/$DIR_OVERRIDE"
+    else
+        worktree_path="$(dirname "$main_root")/$(basename "$main_root")-${branch//\//-}"
+    fi
+
+    warn_long_site_name "$worktree_path"
 
     if [[ $DRY_RUN -eq 1 ]]; then
         echo "[dry-run] would create worktree $worktree_path for branch $branch"
+        echo "[dry-run] valet site: $(valet_site_name "$worktree_path")"
         if ! git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch"; then
             echo "[dry-run] branch '$branch' does not exist; would create from ${BASE_REF:-HEAD}"
         fi
@@ -438,11 +449,16 @@ cmd_destroy() {
     local main_root worktree_path branch env_file offset db_name driver
     main_root="$(resolve_main_root "$MAIN_ROOT_OVERRIDE")"
 
-    # Resolve path from branch name if needed.
+    # Resolve path from branch name if needed. The registered-worktree lookup
+    # (which knows about custom --dir names) wins over the naming convention,
+    # but never resolves to the main repo itself.
     if [[ -d "$target" ]]; then
         worktree_path="$target"
     else
-        worktree_path="$(dirname "$main_root")/$(basename "$main_root")-${target//\//-}"
+        worktree_path="$(_worktree_path_for_branch "$target")"
+        if [[ -z "$worktree_path" || "$worktree_path" == "$main_root" ]]; then
+            worktree_path="$(dirname "$main_root")/$(basename "$main_root")-${target//\//-}"
+        fi
     fi
 
     branch="$(cd "$worktree_path" && git rev-parse --abbrev-ref HEAD 2>/dev/null)" || branch="unknown"
